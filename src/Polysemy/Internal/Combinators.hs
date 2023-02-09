@@ -98,16 +98,14 @@ stateful f = go
             f (weave (s, ()) (uncurry go_) (runWeaveState s) wav)
               (\(s', x) -> c x s')
           ) k
+        {-# INLINE g' #-}
 
         AHandler h = AHandler $ \wav c s -> fromFOEff wav $ \ex e ->
           runSem (f e s) k (\(s', x) -> c (ex x) s')
 
         !k' = mkHandlers $ consHandler' h g'
       in
-        runSem sem0
-          k'
-          (\a s -> c0 (s, a))
-          s0
+        runSem sem0 k' (\a s -> c0 (s, a)) s0
     {-# INLINE go #-}
 
     go_ :: forall x. s -> Sem (e ': r) x -> Sem r (s, x)

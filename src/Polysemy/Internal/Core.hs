@@ -209,16 +209,16 @@ newtype Sem (r :: EffectRow) a = Sem {
 
 data Handlers r m res where
   Handlers :: (forall x. m x -> z x)
-           -> !(HandlerVector r z res)
+           -> {-# UNPACK #-} !(HandlerVector r z res)
            -> Handlers r m res
 
 emptyHandlers :: Handlers '[] m res
-emptyHandlers = Handlers id (HandlerVector emptyFL)
+emptyHandlers = Handlers id (HandlerVector emptySV)
 {-# INLINE emptyHandlers #-}
 
 
 emptyHandlers' :: HandlerVector '[] m res
-emptyHandlers' = HandlerVector emptyFL
+emptyHandlers' = HandlerVector emptySV
 {-# INLINE emptyHandlers' #-}
 
 -- expensive
@@ -234,7 +234,7 @@ imapHandlers' :: (   forall e x
                 )
               -> HandlerVector r m res -> HandlerVector r m' res'
 imapHandlers' f (HandlerVector hs) = HandlerVector $
-  imapFL (\i (Handler' h) -> Handler' (f (UnsafeMkElemOf i) h)) hs
+  imapSV (\i (Handler' h) -> Handler' (f (UnsafeMkElemOf i) h)) hs
 
 hoistHandler :: (forall x. m x -> n x)
              -> (forall x. Weaving e n x -> (x -> res) -> res)
@@ -249,7 +249,7 @@ imapHandlers :: (   forall e x
                )
              -> Handlers r m res -> HandlerVector r m' res'
 imapHandlers f (Handlers n (HandlerVector hs)) = HandlerVector $
-  imapFL (\i (Handler' h) ->
+  imapSV (\i (Handler' h) ->
     Handler' (f (UnsafeMkElemOf i) (\wv -> h (hoistWeaving n wv))))
     hs
 {-# INLINE imapHandlers #-}
@@ -294,7 +294,7 @@ type Handler e m res = forall x. Weaving e m x -> (x -> res) -> res
 newtype Handler' m res = Handler' { unHandler' :: forall e. Handler e m res }
 
 type role HandlerVector representational representational representational
-newtype HandlerVector (r :: EffectRow) m res = HandlerVector (FList (Handler' m res))
+newtype HandlerVector (r :: EffectRow) m res = HandlerVector (SmallVector (Handler' m res))
 
 {-
 
@@ -325,7 +325,7 @@ getHandler (Handlers to v) pr =
 {-# INLINE getHandler #-}
 
 getHandler' :: HandlerVector r m res -> ElemOf e r -> Handler e m res
-getHandler' (HandlerVector v) (UnsafeMkElemOf i) = unHandler' (indexFL v i)
+getHandler' (HandlerVector v) (UnsafeMkElemOf i) = unHandler' (indexSV v i)
 {-# INLINE getHandler' #-}
 
 -- lupdate :: Int -> a -> [a] -> [a]
@@ -337,15 +337,15 @@ infixr 5 `concatHandlers'`
 concatHandlers' :: HandlerVector l m res
                 -> HandlerVector r m res
                 -> HandlerVector (Append l r) m res
-concatHandlers' (HandlerVector l) (HandlerVector r) = HandlerVector (l `concatFL` r)
+concatHandlers' (HandlerVector l) (HandlerVector r) = HandlerVector (l `concatSV` r)
 {-# INLINE concatHandlers' #-}
 
 generateHandlers'
   :: SList r
-  -> (forall x. ElemOf e r -> Weaving e m x -> (x -> res) -> res)
+  -> (forall e x. ElemOf e r -> Weaving e m x -> (x -> res) -> res)
   -> HandlerVector r m res
 generateHandlers' (UnsafeMkSList s) f =
-  HandlerVector (generateFL s (unsafeCoerce f))
+  HandlerVector (generateSV s (unsafeCoerce f))
 {-# INLINE generateHandlers' #-}
 
 replaceHandler' :: forall r e_ e l m res
@@ -354,7 +354,7 @@ replaceHandler' :: forall r e_ e l m res
                -> HandlerVector (Append l (e_ ': r)) m res
                -> HandlerVector (Append l (e ': r)) m res
 replaceHandler' (UnsafeMkSList i) h (HandlerVector v) =
-  HandlerVector $ updateFL i (unsafeCoerce h) v
+  HandlerVector $ updateSV i (unsafeCoerce h) v
 {-# INLINE replaceHandler' #-}
 
 interceptHandler' :: forall r e m res
@@ -363,14 +363,14 @@ interceptHandler' :: forall r e m res
                   -> HandlerVector r m res
                   -> HandlerVector r m res
 interceptHandler' (UnsafeMkElemOf i) h (HandlerVector v) =
-  HandlerVector $ updateFL i (unsafeCoerce h) v
+  HandlerVector $ updateSV i (unsafeCoerce h) v
 {-# INLINE interceptHandler' #-}
 
 infixr 5 `consHandler'`
 consHandler' :: Handler e m res
              -> HandlerVector r m res
              -> HandlerVector (e ': r) m res
-consHandler' h (HandlerVector hs) = HandlerVector (unsafeCoerce h `consFL` hs)
+consHandler' h (HandlerVector hs) = HandlerVector (unsafeCoerce h `consSV` hs)
 {-# INLINE consHandler' #-}
 
 dropHandlers' :: forall l r m res
@@ -378,7 +378,7 @@ dropHandlers' :: forall l r m res
               => HandlerVector (Append l r) m res
               -> HandlerVector r m res
 dropHandlers' (HandlerVector hs) | UnsafeMkSList l <- singList @l =
-  HandlerVector (dropFL l hs)
+  HandlerVector (dropSV l hs)
 {-# INLINE dropHandlers' #-}
 
 takeHandlers' :: forall l r m res
@@ -386,7 +386,7 @@ takeHandlers' :: forall l r m res
               => HandlerVector (Append l r) m res
               -> HandlerVector l m res
 takeHandlers' (HandlerVector hs) | UnsafeMkSList l <- singList @l =
-  HandlerVector (takeFL l hs)
+  HandlerVector (takeSV l hs)
 {-# INLINE takeHandlers' #-}
 
 splitHandlers' :: forall l r m res
@@ -394,142 +394,51 @@ splitHandlers' :: forall l r m res
                => HandlerVector (Append l r) m res
                -> (HandlerVector l m res, HandlerVector r m res)
 splitHandlers' (HandlerVector hs)
-  | UnsafeMkSList n <- singList @l, (l, r) <- splitFL n hs =
+  | UnsafeMkSList n <- singList @l, (l, r) <- splitSV n hs =
       (HandlerVector l, HandlerVector r)
-
-
--- data TransformingVector m res
---   = TransedUnbuffered {-# UNPACK #-} !(Vector (Handler' m res))
---   | TransedBuffered
---       {-# UNPACK #-} !Int
---       {-# UNPACK #-} !(B.Bundle Vector (Handler' m res))
---       {-# UNPACK #-} !(Vector (Handler' m res))
 
 transformHandlerVector
   :: RowTransformer r r'
   -> (forall m res. HandlerVector r' m res -> HandlerVector r m res)
-transformHandlerVector t0 = \(HandlerVector v) -> HandlerVector (go t0 v)
+transformHandlerVector t0 = \(HandlerVector v) -> HandlerVector (t0' v)
   where
+    !t0' = go t0
+
     go :: RowTransformer r r'
-       -> FList (Handler' m res) -> FList (Handler' m res)
-    go Id v = v
-    go (Join l r) v = go r $! go l v
-    go (Raise (UnsafeMkSList n)) v = dropFL n v
-    go (Extend (UnsafeMkSList n)) v = dropEndFL n v
-    go (ExtendAlt _ (UnsafeMkSList n)) v = takeFL n v
-    go (Under (UnsafeMkSList n) t) v
-      | (l, r) <- splitFL n v = l `concatFL` go t r
-    go (Subsume (UnsafeMkElemOf pr)) v =
+       -> SmallVector (Handler' m res) -> SmallVector (Handler' m res)
+    go Id = id
+    go (Join l r) =
       let
-        !h = v `indexFL` pr
+        !l' = go l
+        !r' = go r
       in
-        h `consFL` v
-    go (Expose (UnsafeMkElemOf pr)) v
-      | (!h, v') <- unconsFL v = updateFL pr h v'
-    go (Swap _ (UnsafeMkSList l) (UnsafeMkSList m)) v
-      | (mv, lrv) <- splitFL m v, (lv, rv) <- splitFL l lrv =
-          lv `concatFL` mv `concatFL` rv
-    go (Split _ f g) v = go f v `concatFL` go g v
-
-  {-
-  case go t0 (TransedUnbuffered v) of
-    TransedUnbuffered v' -> HandlerVector v'
-    TransedBuffered _ b v' -> HandlerVector (collapse b v')
-  where
-    conc :: Int -> B.Bundle Vector (Handler' m res)
-         -> TransformingVector m res -> TransformingVector m res
-    conc i b (TransedUnbuffered v) = TransedBuffered i b v
-    conc i b (TransedBuffered i' b' v) = TransedBuffered (i + i') (b B.++ b') v
-
-    collapse :: B.Bundle Vector a -> Vector a -> Vector a
-    collapse b v = G.unstream (b B.++ G.stream v)
-    {-# INLINE collapse #-}
-
-    combine :: TransformingVector m res
-            -> TransformingVector m res
-            -> TransformingVector m res
-    combine (TransedUnbuffered l) (TransedUnbuffered r) =
-      TransedBuffered (V.length l) (G.stream l) r
-    combine (TransedBuffered bn b l) (TransedUnbuffered r) =
-      TransedBuffered (bn + V.length l) (b B.++ G.stream l) r
-    combine (TransedUnbuffered l) (TransedBuffered bn b r) =
-      TransedBuffered (V.length l + bn) (G.stream l B.++ b) r
-    combine (TransedBuffered bnl bl l) (TransedBuffered bnr br r) =
-      TransedBuffered (bnl + V.length l + bnr) (bl B.++ G.stream l B.++ br) r
-
-    go :: RowTransformer r r'
-       -> TransformingVector m res -> TransformingVector m res
-    go Id v = v
-    go (Join l r) v = go r (go l v)
-    go (Raise (UnsafeMkSList n)) (TransedUnbuffered v) =
-      TransedUnbuffered (V.unsafeDrop n v)
-    go (Raise (UnsafeMkSList n)) (TransedBuffered bn b v) = case compare n bn of
-      EQ -> TransedUnbuffered v
-      LT -> TransedUnbuffered (V.drop n (collapse b v))
-      GT -> TransedUnbuffered (V.unsafeDrop (n - bn) v)
-    go (Extend (UnsafeMkSList n)) (TransedUnbuffered v) =
-      TransedUnbuffered (V.take (V.length v - n) v)
-    go (Extend (UnsafeMkSList n)) (TransedBuffered bn b v)
-      | n < V.length v =
-        TransedBuffered bn b (V.take (V.length v - n) v)
-      | otherwise =
-        TransedUnbuffered (V.take (bn + V.length v - n) (G.unstream b))
-    go (ExtendAlt _ (UnsafeMkSList n)) (TransedUnbuffered v) =
-      TransedUnbuffered (V.take n v)
-    go (ExtendAlt _ (UnsafeMkSList n)) (TransedBuffered bn b v)
-      | n <= bn = TransedUnbuffered (V.take n (G.unstream b))
-      | otherwise = TransedBuffered bn b (V.take (n - bn) v)
-    go (Under (UnsafeMkSList n) t) (TransedUnbuffered v)
-      | (l, r) <- V.splitAt n v =
-        conc n (G.stream l) (go t (TransedUnbuffered r))
-    go (Under (UnsafeMkSList n) t) (TransedBuffered bn b v) =
-      case compare n bn of
-        EQ -> conc bn b (go t (TransedUnbuffered v))
-        LT | (l, r) <- V.splitAt n (collapse b v) ->
-             conc n (G.stream l) (go t (TransedUnbuffered r))
-        GT | (l, r) <- V.splitAt (n - bn) v ->
-             conc n (b B.++ G.stream l) (go t (TransedUnbuffered r))
-    go (Subsume (UnsafeMkElemOf pr)) (TransedUnbuffered v) =
-      TransedBuffered 1 (B.singleton $! v V.! pr) v
-    go (Subsume (UnsafeMkElemOf pr)) (TransedBuffered bn b v)
-      | pr >= bn =
-        let
-          !h = v V.! (pr - bn)
-        in
-          TransedBuffered (bn + 1) (B.cons h b) v
-      | otherwise =
-        let v' = collapse b v
-        in TransedBuffered 1 (B.singleton $! v' V.! pr) v'
-    go (Expose pr) (TransedUnbuffered v) = mkExpose pr (V.thaw v)
-    go (Expose pr) (TransedBuffered _ b v) =
-      mkExpose pr (GM.unstream (b B.++ G.stream v))
-    go (Swap _ (UnsafeMkSList l) (UnsafeMkSList m)) (TransedUnbuffered v)
-      = TransedBuffered (l + m)
-        (G.stream (V.slice m l v) B.++ G.stream (V.unsafeTake m v))
-        (V.drop (l + m) v)
-    go (Swap _ (UnsafeMkSList l) (UnsafeMkSList m)) (TransedBuffered bn b v)
-      | bn <= m = TransedBuffered (l + m)
-                                  (G.stream (V.unsafeSlice (m - bn) l v)
-                                   B.++ b
-                                   B.++ G.stream (V.unsafeTake (m - bn) v))
-                                  (V.drop (l + m - bn) v)
-      | otherwise =
-        let
-          v' = collapse b v
-        in TransedBuffered (l + m)
-            (G.stream (V.slice m l v') B.++ G.stream (V.take m v'))
-            (V.drop (l + m) v')
-    go (Split _ f g) v = combine (go f v) (go g v)
-
-    mkExpose :: ElemOf e r
-             -> (forall s. ST s (MV.MVector s (Handler' m res)))
-             -> TransformingVector m res
-    mkExpose (UnsafeMkElemOf pr) mkMv = TransedUnbuffered $ V.create $ do
-      mv <- mkMv
-      h <- MV.unsafeRead mv 0
-      MV.unsafeWrite mv (1 + pr) h
-      return $ MV.tail mv
--}
+        r' . l'
+    go (Raise (UnsafeMkSList n)) = dropSV n
+    go (Extend (UnsafeMkSList n)) = dropEndSV n
+    go (ExtendAlt _ (UnsafeMkSList n)) = takeSV n
+    go (Under (UnsafeMkSList n) t) =
+      let
+        !t' = go t
+      in
+        \v -> case splitSV n v of
+          (l, r) ->  l `concatSV` t' r
+    go (Subsume (UnsafeMkElemOf pr)) = \v ->
+      let
+        !h = v `indexSV` pr
+      in
+        h `consSV` v
+    go (Expose (UnsafeMkElemOf pr)) = \v -> case unconsSV v of
+      (!h, v') -> updateSV pr h v'
+    go (Swap _ (UnsafeMkSList l) (UnsafeMkSList m)) = \v ->
+      case splitSV m v of
+        (mv, lrv) | (lv, rv) <- splitSV l lrv ->
+          lv `concatSV` mv `concatSV` rv
+    go (Split _ f g) =
+      let
+        !f' = go f
+        !g' = go g
+      in
+        \v -> f' v `concatSV` g' v
 
 ------------------------------------------------------------------------------
 -- | Rewrite the effect stack of a 'Sem' using with an explicit row transformer
@@ -538,9 +447,11 @@ transformSem :: forall r' r
 transformSem Id = id
 transformSem t = go
   where
+    t' :: forall m res. HandlerVector r' m res -> HandlerVector r m res
+    !t' = transformHandlerVector t
+
     go :: forall x. Sem r x -> Sem r' x
-    go = hoistSem $ \(Handlers n hs) ->
-      Handlers (n . go_) (transformHandlerVector t hs)
+    go = hoistSem $ \(Handlers n hs) -> Handlers (n . go_) (t' hs)
     {-# INLINE go #-}
 
     go_ :: forall x. Sem r x -> Sem r' x

@@ -12,6 +12,10 @@ data SmallVector a = SmallVector {
     svLen :: {-# UNPACK #-} !Int
   }
 
+instance Functor SmallVector where
+  fmap f = imapSV (\_ -> f)
+  {-# INLINE fmap #-}
+
 -- newtype MultiVector' a = MultiVector' (# (# SmallArray# a | Array# a #), Int#, Int# #)
 
 -- data MultiVector a = MultiVector (# (# #) | a | MultiVector' a #)
@@ -113,11 +117,20 @@ consSV a (SmallVector arr arrS arrL) =
     SmallVector arr' 0 arrL'
 {-# INLINE consSV #-}
 
+unconsSV :: SmallVector a -> (a, SmallVector a)
+unconsSV (SmallVector arr arrS arrL) =
+  let
+    !x = indexSmallArray arr arrS
+    !sv = SmallVector arr (arrS + 1) (arrL - 1)
+  in
+    (x, sv)
+{-# INLINE unconsSV #-}
+
 generateSV :: Int -> (Int -> a) -> SmallVector a
 generateSV n f =
   let
     arr = createSmallArray n (errorWithoutStackTrace "impossible")
-      \ma -> forM_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
+      \ma -> for_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
   in
     SmallVector arr 0 n
 {-# INLINE generateSV #-}
@@ -173,6 +186,16 @@ dropEndSV :: Int -> SmallVector a -> SmallVector a
 dropEndSV i (SmallVector arr arrS arrL) = SmallVector arr arrS (arrL - i)
 {-# INLINE dropEndSV #-}
 
+imapSV :: (Int -> a -> b) -> SmallVector a -> SmallVector b
+imapSV f (SmallVector arr arrS arrL) =
+    let
+      arr' = createSmallArray arrL (errorWithoutStackTrace "impossible") $ \ma ->
+        for_ [0..arrL-1] $ \i -> do
+          writeSmallArray ma i $! f i $! indexSmallArray arr (arrS + i)
+    in
+      SmallVector arr' 0 arrL
+{-# INLINE imapSV #-}
+
 data FList a = FList {
     flistOps :: {-# UNPACK #-} !Int,
     flistLen :: {-# UNPACK #-} !Int,
@@ -184,31 +207,22 @@ instance Functor FList where
   {-# INLINE fmap #-}
 
 memoizeFList :: FList a -> FList a
-memoizeFList (FList _ n f) = FList 0 n f
-{-# INLINE memoizeFList #-}
-
-generateFL :: Int -> (Int -> a) -> FList a
-generateFL n f = FList n n f
-{-# INLINE generateFL #-}
-
-{-
 memoizeFList (FList _ n f) =
   if
     n > 256
   then
     let !v = createArray n (errorWithoutStackTrace "impossible") $ \ma ->
-          forM_ [0..n-1] $ \i -> writeArray ma i $! f i
+          for_ [0..n-1] $ \i -> writeArray ma i $! f i
     in FList 0 n (indexArray v)
   else
     let !v = createSmallArray n (errorWithoutStackTrace "impossible") $ \ma ->
-          forM_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
+          for_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
     in FList 0 n (indexSmallArray v)
 {-# INLINE memoizeFList #-}
--}
 
 memoizeFListCond :: FList a -> FList a
 memoizeFListCond fl@(FList ops n _)
-  | ops > 20 && (ops > 2 * n + 10 || ops > 1000) = memoizeFList fl
+  | ops > 20 && (2 * ops > 3 * n + 15 || ops > 1000) = memoizeFList fl
   | otherwise = fl
 {-# INLINE memoizeFListCond #-}
 
