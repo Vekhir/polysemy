@@ -115,7 +115,7 @@ consSV a (SmallVector arr arrS arrL) =
       copySmallArray sm 1 arr arrS arrL
   in
     SmallVector arr' 0 arrL'
-{-# INLINE consSV #-}
+-- {-# INLINE consSV #-}
 
 unconsSV :: SmallVector a -> (a, SmallVector a)
 unconsSV (SmallVector arr arrS arrL) =
@@ -124,7 +124,7 @@ unconsSV (SmallVector arr arrS arrL) =
     !sv = SmallVector arr (arrS + 1) (arrL - 1)
   in
     (x, sv)
-{-# INLINE unconsSV #-}
+-- {-# INLINE unconsSV #-}
 
 generateSV :: Int -> (Int -> a) -> SmallVector a
 generateSV n f =
@@ -133,7 +133,7 @@ generateSV n f =
       \ma -> for_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
   in
     SmallVector arr 0 n
-{-# INLINE generateSV #-}
+-- {-# INLINE generateSV #-}
 
 updateSV :: Int -> a -> SmallVector a -> SmallVector a
 updateSV i a (SmallVector arr arrS arrL) =
@@ -144,15 +144,15 @@ updateSV i a (SmallVector arr arrS arrL) =
       return mv
   in
     SmallVector arr' 0 arrL
-{-# INLINE updateSV #-}
+-- {-# INLINE updateSV #-}
 
 indexSV :: SmallVector a -> Int -> a
 indexSV (SmallVector arr arrS _) i = indexSmallArray arr (arrS + i)
-{-# INLINE indexSV #-}
+-- {-# INLINE indexSV #-}
 
 emptySV :: SmallVector a
 emptySV = SmallVector emptySmallArray 0 0
-{-# INLINE emptySV #-}
+-- {-# INLINE emptySV #-}
 
 concatSV :: SmallVector a -> SmallVector a -> SmallVector a
 concatSV (SmallVector arrL arrSL arrLL) (SmallVector arrR arrSR arrLR) =
@@ -163,7 +163,7 @@ concatSV (SmallVector arrL arrSL arrLL) (SmallVector arrR arrSR arrLR) =
       copySmallArray ma arrLL arrR arrSR arrLR
   in
     SmallVector arr 0 arrL'
-{-# INLINE concatSV #-}
+-- {-# INLINE concatSV #-}
 
 splitSV :: Int -> SmallVector a -> (SmallVector a, SmallVector a)
 splitSV i (SmallVector arr arrS arrL) =
@@ -172,19 +172,19 @@ splitSV i (SmallVector arr arrS arrL) =
     !arrS' = arrS + i
   in
     (SmallVector arr arrS i, SmallVector arr arrS' arrL')
-{-# INLINE splitSV #-}
+-- {-# INLINE splitSV #-}
 
 takeSV :: Int -> SmallVector a -> SmallVector a
 takeSV i (SmallVector arr arrS _) = SmallVector arr arrS i
-{-# INLINE takeSV #-}
+-- {-# INLINE takeSV #-}
 
 dropSV :: Int -> SmallVector a -> SmallVector a
 dropSV i (SmallVector arr arrS arrL) = SmallVector arr (arrS + i) (arrL - i)
-{-# INLINE dropSV #-}
+-- {-# INLINE dropSV #-}
 
 dropEndSV :: Int -> SmallVector a -> SmallVector a
 dropEndSV i (SmallVector arr arrS arrL) = SmallVector arr arrS (arrL - i)
-{-# INLINE dropEndSV #-}
+-- {-# INLINE dropEndSV #-}
 
 imapSV :: (Int -> a -> b) -> SmallVector a -> SmallVector b
 imapSV f (SmallVector arr arrS arrL) =
@@ -194,7 +194,7 @@ imapSV f (SmallVector arr arrS arrL) =
           writeSmallArray ma i $! f i $! indexSmallArray arr (arrS + i)
     in
       SmallVector arr' 0 arrL
-{-# INLINE imapSV #-}
+-- {-# INLINE imapSV #-}
 
 data FList a = FList {
     flistOps :: {-# UNPACK #-} !Int,
@@ -203,7 +203,7 @@ data FList a = FList {
   }
 
 instance Functor FList where
-  fmap g (FList ops i f) = FList ops i (g . f)
+  fmap g (FList ops n f) = FList ops n (g . f)
   {-# INLINE fmap #-}
 
 memoizeFList :: FList a -> FList a
@@ -218,24 +218,24 @@ memoizeFList (FList _ n f) =
     let !v = createSmallArray n (errorWithoutStackTrace "impossible") $ \ma ->
           for_ [0..n-1] $ \i -> writeSmallArray ma i $! f i
     in FList 0 n (indexSmallArray v)
-{-# INLINE memoizeFList #-}
+-- {-# INLINE memoizeFList #-}
 
 memoizeFListCond :: FList a -> FList a
 memoizeFListCond fl@(FList ops n _)
   | ops > 20 && (2 * ops > 3 * n + 15 || ops > 1000) = memoizeFList fl
   | otherwise = fl
-{-# INLINE memoizeFListCond #-}
+-- {-# INLINE memoizeFListCond #-}
 
 infixr 5 `consFL`
 consFL :: a -> FList a -> FList a
 consFL h (FList ops n f) = FList (ops + 1) (n + 1) \case
   0 -> h
   i -> f (i - 1)
-{-# INLINE consFL #-}
+-- {-# INLINE consFL #-}
 
 headFL :: FList a -> a
 headFL (FList _ _ f) = f 0
-{-# INLINE headFL #-}
+-- {-# INLINE headFL #-}
 
 unconsFL :: FList a -> (a, FList a)
 unconsFL (FList ops n f) =
@@ -244,31 +244,31 @@ unconsFL (FList ops n f) =
     !fl = memoizeFListCond $ FList (ops + 1) (n - 1) (f . (+1))
   in
     (x, fl)
-{-# INLINE unconsFL #-}
+-- {-# INLINE unconsFL #-}
 
 infixr 5 `concatFL`
 concatFL :: FList a -> FList a -> FList a
 concatFL (FList opsl n f) (FList opsr m g) =
   memoizeFListCond $ FList (max opsl opsr + 1) (n + m) \i ->
     if i < n then f i else g (i - n)
-{-# INLINE concatFL #-}
+-- {-# INLINE concatFL #-}
 
 indexFL :: FList a -> Int -> a
 indexFL (FList _ _ f) i = f i
-{-# INLINE indexFL #-}
+-- {-# INLINE indexFL #-}
 
 emptyFL :: FList a
 emptyFL = FList 0 0 (\_ -> errorWithoutStackTrace "end of FList")
-{-# INLINE emptyFL #-}
+-- {-# INLINE emptyFL #-}
 
 updateFL :: Int -> a -> FList a -> FList a
 updateFL i a (FList ops n f) = memoizeFListCond $ FList (ops + 1) n \i' ->
   if i' == i then a else f i'
-{-# INLINE updateFL #-}
+-- {-# INLINE updateFL #-}
 
 imapFL :: (Int -> a -> b) -> FList a -> FList b
 imapFL g (FList ops n f) = FList ops n \i -> g i (f i)
-{-# INLINE imapFL #-}
+-- {-# INLINE imapFL #-}
 
 splitFL :: Int -> FList a -> (FList a, FList a)
 splitFL i (FList ops n f) =
@@ -277,25 +277,29 @@ splitFL i (FList ops n f) =
     !r = memoizeFListCond $ FList (ops + 1) (n - i) (f . (+ i))
   in
     (l, r)
-{-# INLINE splitFL #-}
+-- {-# INLINE splitFL #-}
 
 takeFL :: Int -> FList a -> FList a
 takeFL i (FList ops n f) = FList (max 0 (ops - (n - i))) i f
-{-# INLINE takeFL #-}
+-- {-# INLINE takeFL #-}
 
 dropFL :: Int -> FList a -> FList a
 dropFL i (FList ops n f) = memoizeFListCond $ FList (ops + 1) (n - i) (f . (+ i))
-{-# INLINE dropFL #-}
+-- {-# INLINE dropFL #-}
 
 dropEndFL :: Int -> FList a -> FList a
 dropEndFL i (FList ops n f) = FList (max 0 (ops - i)) (n - i) f
-{-# INLINE dropEndFL #-}
+-- {-# INLINE dropEndFL #-}
 
 data Hybrid a = Hybrid {-# UNPACK #-} !(SmallVector a) {-# UNPACK #-} !(FList a)
 
 fromFList :: FList a -> Hybrid a
 fromFList = Hybrid emptySV
-{-# INLINE fromFList #-}
+-- {-# INLINE fromFList #-}
+
+fromSmallVector :: SmallVector a -> Hybrid a
+fromSmallVector sv = Hybrid sv emptyFL
+-- {-# INLINE fromSmallVector #-}
 
 collapseHY :: Hybrid a -> FList a
 collapseHY (Hybrid (SmallVector _ _ 0) fl) = fl
@@ -305,12 +309,27 @@ collapseHY (Hybrid (SmallVector arr arrS arrL) (FList ops n f)) =
       indexSmallArray arr (arrS + i)
     else
       f (i - arrL)
-{-# INLINE collapseHY #-}
+-- {-# INLINE collapseHY #-}
+
+collapseHY' :: Hybrid a -> SmallVector a
+collapseHY' (Hybrid sv (FList _ 0 _)) = sv
+collapseHY' (Hybrid (SmallVector arr arrS arrL) (FList _ n f)) =
+  let
+    arrL' = arrL + n
+    arr' = createSmallArray arrL' (errorWithoutStackTrace "impossible") $ \ma ->
+      do
+        copySmallArray ma 0 arr arrS arrL
+        for_ [0..n-1] $ \i ->
+          writeSmallArray ma (arrL + i) $! f i
+  in
+    SmallVector arr' 0 arrL'
+-- {-# INLINE collapseHY' #-}
+
 
 infixr 5 `consHY`
 consHY :: a -> Hybrid a -> Hybrid a
 consHY a (Hybrid sv fl) = Hybrid (consSV a sv) fl
-{-# INLINE consHY #-}
+-- {-# INLINE consHY #-}
 
 instance Functor Hybrid where
   fmap f = fromFList . fmap f . collapseHY
@@ -318,13 +337,13 @@ instance Functor Hybrid where
 
 imapHY :: (Int -> a -> b) -> Hybrid a -> Hybrid b
 imapHY f = fromFList . imapFL f . collapseHY
-{-# INLINE imapHY #-}
+-- {-# INLINE imapHY #-}
 
 indexHY :: Hybrid a -> Int -> a
 indexHY (Hybrid (SmallVector arr arrS arrL) (FList _ _ f)) i
   | i < arrL  = indexSmallArray arr (arrS + i)
   | otherwise = f (i - arrL)
-{-# INLINE indexHY #-}
+-- {-# INLINE indexHY #-}
 
 unconsHY :: Hybrid a -> (a, Hybrid a)
 unconsHY (Hybrid (SmallVector _ _ 0) fl) =
@@ -344,7 +363,7 @@ unconsHY (Hybrid (SmallVector arr arrS arrL) fl) =
     !hy = Hybrid (SmallVector arr (arrS + 1) (arrL - 1)) fl
   in
     (x, hy)
-{-# INLINE unconsHY #-}
+-- {-# INLINE unconsHY #-}
 
 infixr 5 `concatHY`
 concatHY :: Hybrid a -> Hybrid a -> Hybrid a
@@ -352,13 +371,13 @@ concatHY (Hybrid sv (FList _ 0 _)) (Hybrid sv' fl')
   = Hybrid (concatSV sv sv') fl'
 concatHY (Hybrid sv fl) hyR
   = Hybrid sv (concatFL fl (collapseHY hyR))
-{-# INLINE concatHY #-}
+-- {-# INLINE concatHY #-}
 
 updateHY :: Int -> a -> Hybrid a -> Hybrid a
 updateHY i a (Hybrid sv@(SmallVector _ _ arrL) fl)
   | i < arrL  = Hybrid (updateSV i a sv) fl
   | otherwise = Hybrid sv (updateFL (i - arrL) a fl)
-{-# INLINE updateHY #-}
+-- {-# INLINE updateHY #-}
 
 splitHY :: Int -> Hybrid a -> (Hybrid a, Hybrid a)
 splitHY i (Hybrid sv@(SmallVector _ _ arrL) fl) = case compare i arrL of
@@ -373,33 +392,33 @@ splitHY i (Hybrid sv@(SmallVector _ _ arrL) fl) = case compare i arrL of
       !(l, r) = splitFL (i - arrL) fl
     in
       (Hybrid sv l, Hybrid emptySV r)
-{-# INLINE splitHY #-}
+-- {-# INLINE splitHY #-}
 
 takeHY :: Int -> Hybrid a -> Hybrid a
 takeHY i (Hybrid sv@(SmallVector _ _ arrL) fl) = case compare i arrL of
   EQ -> Hybrid sv emptyFL
   LT -> Hybrid (takeSV i sv) emptyFL
   GT -> Hybrid sv (takeFL (i - arrL) fl)
-{-# INLINE takeHY #-}
+-- {-# INLINE takeHY #-}
 
 dropHY :: Int -> Hybrid a -> Hybrid a
 dropHY i (Hybrid sv@(SmallVector _ _ arrL) fl) = case compare i arrL of
   EQ -> Hybrid emptySV fl
   LT -> Hybrid (dropSV i sv) fl
   GT -> Hybrid emptySV (dropFL (i - arrL) fl)
-{-# INLINE dropHY #-}
+-- {-# INLINE dropHY #-}
 
 dropEndHY :: Int -> Hybrid a -> Hybrid a
 dropEndHY i (Hybrid sv fl@(FList _ n _)) = case compare i n of
   EQ -> Hybrid sv emptyFL
   LT -> Hybrid sv (dropEndFL i fl)
   GT -> Hybrid (dropEndSV (i - n) sv) emptyFL
-{-# INLINE dropEndHY #-}
+-- {-# INLINE dropEndHY #-}
 
 generateHY :: Int -> (Int -> a) -> Hybrid a
 generateHY n f = Hybrid (generateSV n f) emptyFL
-{-# INLINE generateHY #-}
+-- {-# INLINE generateHY #-}
 
 emptyHY :: Hybrid a
 emptyHY = Hybrid emptySV emptyFL
-{-# INLINE emptyHY #-}
+-- {-# INLINE emptyHY #-}

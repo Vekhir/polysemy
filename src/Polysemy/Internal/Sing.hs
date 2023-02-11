@@ -65,9 +65,11 @@ class KnownList l where
 
 instance KnownList '[] where
   singList = SEnd
+  {-# INLINE singList #-}
 
 instance KnownList xs => KnownList (x ': xs) where
   singList = SCons singList
+  {-# INLINE singList #-}
 
 ------------------------------------------------------------------------------
 -- | A utility class for constructing a type-level list of a given length.

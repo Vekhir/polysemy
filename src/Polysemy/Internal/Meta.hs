@@ -47,8 +47,8 @@ splitMeta :: Unique
           -> Sem (Meta metaeff ': MetaRun ': r) a
 splitMeta uniq = go
   where
-    go :: Sem (Meta metaeff ': r) a -> Sem (Meta metaeff ': MetaRun ': r) a
-    go = hoistSem $ \(Handlers n hs) ->
+    splitMetaHS :: HandlerTrans (Meta metaeff ': r) (Meta metaeff ': MetaRun ': r)
+    splitMetaHS (Handlers n hs) =
       let
         AHandler hM = AHandler $ \wav ->
           case wav & rewriteWeaving' \case
@@ -59,12 +59,15 @@ splitMeta uniq = go
             Union pr wav' -> getHandler' hs pr wav'
       in
         Handlers (n . go_) (hM `consHandler'` dropHandlers' @'[_, _] hs)
-    {-# INLINE go #-}
+
+    go :: Sem (Meta metaeff ': r) a -> Sem (Meta metaeff ': MetaRun ': r) a
+    go = hoistSem splitMetaHS
+    -- {-# INLINE go #-}
 
     go_ :: Sem (Meta metaeff ': r) a -> Sem (Meta metaeff ': MetaRun ': r) a
     go_ = go
     {-# NOINLINE go_ #-}
-{-# INLINE splitMeta #-}
+-- {-# INLINE splitMeta #-}
 
 class AllSemRaises l r
 instance AllSemRaises '[] r
@@ -74,14 +77,14 @@ instance (t ~ '(Sem (eff ': r), eff), AllSemRaises l' r)
 proveSemRaise :: forall l r eff z
                . AllSemRaises l r => ElemOf '(z, eff) l -> z :~: Sem (eff ': r)
 proveSemRaise !_ = unsafeCoerce Refl
-{-# INLINE proveSemRaise #-}
+-- {-# INLINE proveSemRaise #-}
 
 sendMeta :: forall metaeff l r a
           . (Member (Meta metaeff) r, AllSemRaises l r)
          => metaeff l (Sem r) a
          -> Sem r a
 sendMeta = sendMetaUsing membership
-{-# INLINE sendMeta #-}
+-- {-# INLINE sendMeta #-}
 
 sendMetaUsing :: forall metaeff l r a
                . AllSemRaises l r
@@ -91,7 +94,7 @@ sendMetaUsing :: forall metaeff l r a
 sendMetaUsing pr = sendMetaViaUsing pr
                     id
                     (\pr' -> case proveSemRaise @l @r pr' of Refl -> id)
-{-# INLINE sendMetaUsing #-}
+-- {-# INLINE sendMetaUsing #-}
 
 sendMetaVia :: forall metaeff l m r a
              . Member (Meta metaeff) r
@@ -100,7 +103,7 @@ sendMetaVia :: forall metaeff l m r a
             -> metaeff l m a
             -> Sem r a
 sendMetaVia = sendMetaViaUsing membership
-{-# INLINE sendMetaVia #-}
+-- {-# INLINE sendMetaVia #-}
 
 sendMetaViaUsing
   :: forall metaeff l m r a
@@ -121,7 +124,7 @@ metaToMeta ::
   (forall l m x. metaeff0 l m x -> metaeff1 l m x) ->
   InterpreterFor (Meta metaeff0) r
 metaToMeta = metaToMetaUsing membership
-{-# INLINE metaToMeta #-}
+-- {-# INLINE metaToMeta #-}
 
 metaToMetaUsing ::
   ∀ metaeff1 metaeff0 r.
@@ -144,7 +147,7 @@ metaIntoMeta n = rewrite \case
 
 mkIntoMeta :: ∀ metaeff m x. metaeff '[] m x -> Meta metaeff m x
 mkIntoMeta e = SendMeta e id (\_ _ u _ -> absurdMembership u)
-{-# INLINE mkIntoMeta #-}
+-- {-# INLINE mkIntoMeta #-}
 
 type family ProcessorWithMeta metaeff (b :: Bool) (tail :: EffectRow) where
   ProcessorWithMeta metaeff 'True tail = Meta metaeff ': tail
@@ -215,7 +218,7 @@ instance {-# OVERLAPPING #-}
       eff ~ eff'
   => DepMember eff z ('(z, eff') ': l) where
   depMembership = Here
-  {-# INLINE depMembership #-}
+  -- {-# INLINE depMembership #-}
 
 instance DepMember eff z l
       => DepMember eff z (_t : l) where
@@ -227,7 +230,7 @@ getProcessorMetaUsing
   => Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r)
          (ProcessorMetaUsing 'False metaeff t rH l)
 getProcessorMetaUsing = return (ProcessorMetaUsing metaProcessorUsing)
-{-# INLINE getProcessorMetaUsing #-}
+-- {-# INLINE getProcessorMetaUsing #-}
 
 getProcessorMetaUsing'
   :: forall r metaeff z t rH rC l mh
@@ -235,7 +238,7 @@ getProcessorMetaUsing'
   => Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r)
          (ProcessorMetaUsing 'True metaeff t rH l)
 getProcessorMetaUsing' = return (ProcessorMetaUsing metaProcessorUsing')
-{-# INLINE getProcessorMetaUsing' #-}
+-- {-# INLINE getProcessorMetaUsing' #-}
 
 getProcessorMeta
   :: forall r metaeff z t rH rC l mh
@@ -243,7 +246,7 @@ getProcessorMeta
   => Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r)
          (ProcessorMeta 'False metaeff t rH l)
 getProcessorMeta = return (ProcessorMeta (metaProcessorUsing depMembership))
-{-# INLINE getProcessorMeta #-}
+-- {-# INLINE getProcessorMeta #-}
 
 getProcessorMeta'
   :: forall r metaeff z t rH rC l mh
@@ -251,7 +254,7 @@ getProcessorMeta'
   => Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r)
          (ProcessorMeta 'True metaeff t rH l)
 getProcessorMeta' = return (ProcessorMeta (metaProcessorUsing' depMembership))
-{-# INLINE getProcessorMeta' #-}
+-- {-# INLINE getProcessorMeta' #-}
 
 metaProcessorUsing
   :: forall q eff metaeff t r l x y
@@ -261,7 +264,7 @@ metaProcessorUsing
   -> Sem (eff ': HandlingMeta metaeff t r l ': r) (t y)
 metaProcessorUsing =
   \pr t ex -> join $ sendUsing (There Here) (ProcessMeta pr t ex)
-{-# INLINE metaProcessorUsing #-}
+-- {-# INLINE metaProcessorUsing #-}
 
 metaProcessorUsing'
   :: forall q eff metaeff t r l x y
@@ -271,7 +274,7 @@ metaProcessorUsing'
   -> Sem (eff ': Meta metaeff ': HandlingMeta metaeff t r l ': r) (t y)
 metaProcessorUsing' =
   \pr t ex -> join $ sendUsing (There (There Here)) (ProcessMeta' pr t ex)
-{-# INLINE metaProcessorUsing' #-}
+-- {-# INLINE metaProcessorUsing' #-}
 
 processMetaUsing :: forall r eff q metaeff z t rH rC l a mh
                   . mh ~ HandlingMeta metaeff t rH l
@@ -281,7 +284,7 @@ processMetaUsing :: forall r eff q metaeff z t rH rC l a mh
                         (Sem (eff ': mh ': rH) (t a))
 processMetaUsing pr q = do
   fmap (\t -> metaProcessorUsing pr t (\_ -> q)) getStateH
-{-# INLINE processMetaUsing #-}
+-- {-# INLINE processMetaUsing #-}
 
 processMetaUsing' :: forall r eff q metaeff z t rH rC l a mh
                    . mh ~ HandlingMeta metaeff t rH l
@@ -291,7 +294,7 @@ processMetaUsing' :: forall r eff q metaeff z t rH rC l a mh
                          (Sem (eff ': Meta metaeff ': mh ': rH) (t a))
 processMetaUsing' pr q = do
   fmap (\t -> metaProcessorUsing' pr t (\_ -> q)) getStateH
-{-# INLINE processMetaUsing' #-}
+-- {-# INLINE processMetaUsing' #-}
 
 runMeta :: forall r eff q metaeff z t rH rC l a b mh
          . (DepMember eff q l, mh ~ HandlingMeta metaeff t rH l)
@@ -299,7 +302,7 @@ runMeta :: forall r eff q metaeff z t rH rC l a b mh
         -> q a
         -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runMeta = runMetaUsing depMembership
-{-# INLINE runMeta #-}
+-- {-# INLINE runMeta #-}
 
 runMetaUsing :: forall r eff q metaeff z t rH rC l a b mh
               . mh ~ HandlingMeta metaeff t rH l
@@ -308,7 +311,7 @@ runMetaUsing :: forall r eff q metaeff z t rH rC l a b mh
              -> q a
              -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runMetaUsing pr interp = runExposeMetaUsing pr interp >=> restoreH
-{-# INLINE runMetaUsing #-}
+-- {-# INLINE runMetaUsing #-}
 
 runMeta' :: forall r eff q metaeff z t rH rC l a b mh
           . (DepMember eff q l , mh ~ HandlingMeta metaeff t rH l)
@@ -316,7 +319,7 @@ runMeta' :: forall r eff q metaeff z t rH rC l a b mh
          -> q a
          -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runMeta' = runMetaUsing' depMembership
-{-# INLINE runMeta' #-}
+-- {-# INLINE runMeta' #-}
 
 runMetaUsing' :: forall r eff q metaeff z t rH rC l a b mh
                . mh ~ HandlingMeta metaeff t rH l
@@ -325,7 +328,7 @@ runMetaUsing' :: forall r eff q metaeff z t rH rC l a b mh
               -> q a
               -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runMetaUsing' pr interp = runExposeMetaUsing' pr interp >=> restoreH
-{-# INLINE runMetaUsing' #-}
+-- {-# INLINE runMetaUsing' #-}
 
 runExposeMeta :: forall r eff q metaeff z t rH rC l a b mh
                . (DepMember eff q l, mh ~ HandlingMeta metaeff t rH l)
@@ -333,7 +336,7 @@ runExposeMeta :: forall r eff q metaeff z t rH rC l a b mh
               -> q a
               -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runExposeMeta = runExposeMetaUsing depMembership
-{-# INLINE runExposeMeta #-}
+-- {-# INLINE runExposeMeta #-}
 
 runExposeMeta' :: forall r eff q metaeff z t rH rC l a b mh
                 . (DepMember eff q l, mh ~ HandlingMeta metaeff t rH l)
@@ -341,7 +344,7 @@ runExposeMeta' :: forall r eff q metaeff z t rH rC l a b mh
                -> q a
                -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runExposeMeta' = runExposeMetaUsing' depMembership
-{-# INLINE runExposeMeta' #-}
+-- {-# INLINE runExposeMeta' #-}
 
 runExposeMetaUsing :: forall r eff q metaeff z t rH rC l a b mh
                     . mh ~ HandlingMeta metaeff t rH l
@@ -350,7 +353,7 @@ runExposeMetaUsing :: forall r eff q metaeff z t rH rC l a b mh
                    -> q a
                    -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runExposeMetaUsing pr interp = processMetaUsing pr >=> embedH . interp
-{-# INLINE runExposeMetaUsing #-}
+-- {-# INLINE runExposeMetaUsing #-}
 
 runExposeMetaUsing' :: forall r metaeff eff q z t rH rC l a b mh
                      . mh ~ HandlingMeta metaeff t rH l
@@ -359,7 +362,7 @@ runExposeMetaUsing' :: forall r metaeff eff q z t rH rC l a b mh
                     -> q a
                     -> Sem (HigherOrder z t (Meta metaeff) (mh ': rH) rC ': r) b
 runExposeMetaUsing' pr interp = processMetaUsing' pr >=> embedH . interp
-{-# INLINE runExposeMetaUsing' #-}
+-- {-# INLINE runExposeMetaUsing' #-}
 
 type MetaHandler metaeff r =
    (   forall l t z x mh
@@ -373,8 +376,8 @@ exposeMetaRun :: forall eff r a
               -> Unique -> Sem r a -> Sem (eff ': r) a
 exposeMetaRun pr uniq = go
   where
-    go :: forall x. Sem r x -> Sem (eff ': r) x
-    go = hoistSem $ \(Handlers n hs) ->
+    exposeMetaRunHS :: HandlerTrans r (eff ': r)
+    exposeMetaRunHS (Handlers n hs) =
       let
         AHandler h = AHandler $ \wav ->
           case wav & rewriteWeaving' \case
@@ -385,12 +388,14 @@ exposeMetaRun pr uniq = go
             Union pr wav' -> getHandler' hs pr wav'
       in
         Handlers (n . go_) (interceptHandler' pr h (dropHandlers' @'[_] hs))
-    {-# INLINE go #-}
+    go :: forall x. Sem r x -> Sem (eff ': r) x
+    go = hoistSem exposeMetaRunHS
+    -- {-# INLINE go #-}
 
     go_ :: forall x. Sem r x -> Sem (eff ': r) x
     go_ = go
     {-# NOINLINE go_ #-}
-{-# INLINE exposeMetaRun #-}
+-- {-# INLINE exposeMetaRun #-}
 
 interpretMeta
   :: forall metaeff r
@@ -432,7 +437,7 @@ interpretMeta h = \m -> do
                     &# fmap Identity
                 _ -> errorWithoutStackTrace
                       "handleHandlingMetaSpecific: not specially handled"
-              {-# INLINE handleHandlingMetaSpecific #-}
+              -- {-# INLINE handleHandlingMetaSpecific #-}
 
               goSent :: forall rC x mh
                       . mh ~ HandlingMeta metaeff Identity r l
@@ -461,7 +466,7 @@ interpretMeta h = \m -> do
                     getHandler k' pr
                        (mkWVia (fmap runIdentity #. n'' id .# Identity) e')
                        (c' . ex')
-              {-# INLINE goSent #-}
+              -- {-# INLINE goSent #-}
 
               goSent_ :: forall rC x mh
                        . mh ~ HandlingMeta metaeff Identity r l
@@ -497,7 +502,7 @@ interpretMeta h = \m -> do
                       &# fmap ViaTraversal
                   _ -> errorWithoutStackTrace
                         "handleHandlingMetaSpecific: not specially handled"
-                {-# INLINE handleHandlingMetaSpecific #-}
+                -- {-# INLINE handleHandlingMetaSpecific #-}
 
                 goWeaved :: forall rC x mh
                         . mh ~ HandlingMeta metaeff (ViaTraversal s t) r l
@@ -539,7 +544,7 @@ interpretMeta h = \m -> do
                                   lwr'
                                   )) $ \ta ->
                         wH (mkW $ RestoreW ta) (c' . ex')
-                {-# INLINE goWeaved #-}
+                -- {-# INLINE goWeaved #-}
 
                 goWeaved_ :: forall rC x mh
                            . mh ~ HandlingMeta metaeff (ViaTraversal s t) r l
@@ -552,7 +557,7 @@ interpretMeta h = \m -> do
               in
                 runSem (handlingMetaIntoMetaRun handleHandlingMetaSpecific
                           (lwr (goWeaved (h metaeff)))) hs (c .# coerce)
-      {-# INLINE go #-}
+      -- {-# INLINE go #-}
 
       go_ :: InterpreterFor (Meta metaeff) (MetaRun ': r)
       go_ = go
@@ -573,10 +578,8 @@ interpretMeta h = \m -> do
       -> Sem (meta ': MetaRun ': r') x
     handlingMetaToMeta specific = goHMTM
       where
-        goHMTM :: forall y
-                . Sem (meta ': HandlingMeta metaeff t r l ': r') y
-               -> Sem (meta ': MetaRun ': r') y
-        goHMTM = hoistSem $ \(Handlers n hs) ->
+        hMTMHS :: HandlerTrans (meta ': HandlingMeta metaeff t r l ': r') (meta ': MetaRun ': r')
+        hMTMHS (Handlers n hs) =
           let
             AHandler !hMR = AHandler $ getHandler' hs (There Here)
 
@@ -590,14 +593,18 @@ interpretMeta h = \m -> do
             Handlers (n . goHMTM_) $
               getHandler' hs Here `consHandler'` hHM `consHandler'`
               dropHandlers' @'[_, _] hs
-        {-# INLINE goHMTM #-}
+        goHMTM :: forall y
+                . Sem (meta ': HandlingMeta metaeff t r l ': r') y
+               -> Sem (meta ': MetaRun ': r') y
+        goHMTM = hoistSem hMTMHS
+        -- {-# INLINE goHMTM #-}
 
         goHMTM_ :: forall y
                  . Sem (meta ': HandlingMeta metaeff t r l ': r') y
                 -> Sem (meta ': MetaRun ': r') y
         goHMTM_ = goHMTM
         {-# NOINLINE goHMTM_ #-}
-    {-# INLINE handlingMetaToMeta #-}
+    -- {-# INLINE handlingMetaToMeta #-}
 
     handlingMetaIntoMetaRun
       :: forall t l r' x
@@ -606,10 +613,8 @@ interpretMeta h = \m -> do
       -> Sem (MetaRun ': r') x
     handlingMetaIntoMetaRun specific = goHMIMR
       where
-        goHMIMR
-          :: Sem (HandlingMeta metaeff t r l ': r') y
-          -> Sem (MetaRun ': r') y
-        goHMIMR = hoistSem $ \(Handlers n hs) ->
+        hMIMRHS :: HandlerTrans (HandlingMeta metaeff t r l ': r') (MetaRun ': r')
+        hMIMRHS (Handlers n hs) =
           let
             AHandler !hMR = AHandler $ getHandler' hs Here
             AHandler hHM = AHandler $ \wav c -> case wav of
@@ -620,7 +625,12 @@ interpretMeta h = \m -> do
               _ -> fromFOEff wav $ \ex e -> c (ex (specific e))
           in
             Handlers (n . goHMIMR_) (consHandler' hHM (dropHandlers' @'[_] hs))
-        {-# INLINE goHMIMR #-}
+
+        goHMIMR
+          :: Sem (HandlingMeta metaeff t r l ': r') y
+          -> Sem (MetaRun ': r') y
+        goHMIMR = hoistSem hMIMRHS
+        -- {-# INLINE goHMIMR #-}
 
         goHMIMR_
           :: forall y
@@ -628,7 +638,7 @@ interpretMeta h = \m -> do
           -> Sem (MetaRun ': r') y
         goHMIMR_ = goHMIMR
         {-# NOINLINE goHMIMR_ #-}
-    {-# INLINE handlingMetaIntoMetaRun #-}
+    -- {-# INLINE handlingMetaIntoMetaRun #-}
 
 {-
 interpretMeta
@@ -753,18 +763,18 @@ reinterpretMeta
    . MetaHandler metaeff (e2 ': r)
   -> (forall x. Sem (Meta metaeff ': r) x -> Sem (e2 ': r) x)
 reinterpretMeta h = interpretMeta h . raiseUnder
-{-# INLINE reinterpretMeta #-}
+-- {-# INLINE reinterpretMeta #-}
 
 reinterpretMeta2
   :: forall metaeff e2 e3 r
    . MetaHandler metaeff (e2 ': e3 ': r)
   -> (forall x. Sem (Meta metaeff ': r) x -> Sem (e2 ': e3 ': r) x)
 reinterpretMeta2 h = interpretMeta h . raise2Under
-{-# INLINE reinterpretMeta2 #-}
+-- {-# INLINE reinterpretMeta2 #-}
 
 reinterpretMeta3
   :: forall metaeff e2 e3 e4 r
    . MetaHandler metaeff (e2 ': e3 ': e4 ': r)
   -> (forall x. Sem (Meta metaeff ': r) x -> Sem (e2 ': e3 ': e4 ': r) x)
 reinterpretMeta3 h = interpretMeta h . raise3Under
-{-# INLINE reinterpretMeta3 #-}
+-- {-# INLINE reinterpretMeta3 #-}

@@ -128,12 +128,15 @@ class Member (t :: Effect) (r :: EffectRow) where
 
 instance {-# OVERLAPPING #-} Member t (t ': z) where
   membership = Here
+  {-# INLINE membership #-}
 
 instance Member t z => Member t (_1 ': z) where
   membership = There $ membership @t @z
+  {-# INLINE membership #-}
 
 instance {-# INCOHERENT #-} Member t z => Member t (Opaque q ': z) where
   membership = There $ membership @t @z
+  {-# INLINE membership #-}
 
 ------------------------------------------------------------------------------
 -- | A class for effect rows whose elements are inspectable.

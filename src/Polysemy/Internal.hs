@@ -41,6 +41,7 @@ module Polysemy.Internal
   , usingSem
   , liftWeaving
   , hoistSem
+  , HandlerTrans
   , transformSem
   , Append
   , InterpreterFor
@@ -146,8 +147,10 @@ instance Raise r r' => Raise r (_0 ': r') where
 -- 'Control.Monad.Class.Trans.lift' in the mtl ecosystem. For a variant that
 -- can introduce an arbitrary number of effects, see 'raise_'.
 raise :: ∀ e r a. Sem r a -> Sem (e ': r) a
-raise = hoistSem $ \(Handlers n hs) ->
-  Handlers (n . raise) (dropHandlers' @'[_] hs)
+raise = hoistSem raiseHS
+  where
+    raiseHS :: HandlerTrans r (e ': r)
+    raiseHS (Handlers n hs) = Handlers (n . raise) (dropHandlers' @'[_] hs)
 {-# INLINE[3] raise #-}
 
 
@@ -340,11 +343,14 @@ subsume = subsumeUsing membership
 --
 -- @since 1.3.0.0
 subsumeUsing :: ∀ e r a. ElemOf e r -> Sem (e ': r) a -> Sem r a
-subsumeUsing pr = hoistSem $ \(Handlers n hs) ->
-  let
-    AHandler !h = AHandler $ getHandler' hs pr
-  in
-    Handlers (n . subsumeUsing pr) (consHandler' h hs)
+subsumeUsing pr = hoistSem subsumeUsingHS
+  where
+    subsumeUsingHS :: HandlerTrans (e ': r) r
+    subsumeUsingHS (Handlers n hs) =
+      let
+        AHandler !h = AHandler $ getHandler' hs pr
+      in
+        Handlers (n . subsumeUsing pr) (consHandler' h hs)
 {-# INLINE subsumeUsing #-}
 
 ------------------------------------------------------------------------------
@@ -402,13 +408,16 @@ insertAt = transformSem $
 --
 -- @since 2.0.0.0
 exposeUsing :: forall e r a. ElemOf e r -> Sem r a -> Sem (e ': r) a
-exposeUsing pr = hoistSem $ \(Handlers n hs) ->
-  let
-    AHandler !h = AHandler $ getHandler' hs Here
-  in
-    Handlers
-      (n . exposeUsing pr)
-      (interceptHandler' pr h (dropHandlers' @'[_] hs))
+exposeUsing pr = hoistSem exposeUsingHS
+  where
+    exposeUsingHS :: HandlerTrans r (e ': r)
+    exposeUsingHS (Handlers n hs) =
+      let
+        AHandler !h = AHandler $ getHandler' hs Here
+      in
+        Handlers
+          (n . exposeUsing pr)
+          (interceptHandler' pr h (dropHandlers' @'[_] hs))
 
 -- transformSem (exposeRow pr)
 {-# INLINE exposeUsing #-}
@@ -440,13 +449,16 @@ floatAbove = transformSem (swapRow @r (singList @l) (SCons SEnd))
 interpretFast :: forall e r. (∀ z x. e z x -> Sem r x) -> InterpreterFor e r
 interpretFast h = go
   where
-    go :: InterpreterFor e r
-    go = hoistSem $ \hs@(Handlers n v) ->
+    interpretFastHS :: HandlerTrans (e ': r) r
+    interpretFastHS hs@(Handlers n v) =
       let
         AHandler !ah = AHandler $ \wv c -> fromFOEff wv $ \ex e ->
           runSem (h e) hs (c . ex)
       in
         Handlers (n . go_) (consHandler' ah v)
+
+    go :: InterpreterFor e r
+    go = hoistSem interpretFastHS
     {-# INLINE go #-}
 
     go_ :: InterpreterFor e r

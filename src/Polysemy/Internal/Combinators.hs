@@ -36,7 +36,7 @@ runWeaveState s0' sem0' = go s0' sem0'
             f (weave (s, ()) (uncurry runWeaveState) (runWeaveState s) wav)
               (\(s', x) -> c x s')
           ) k
-        {-# INLINE g' #-}
+        -- {-# INLINE g' #-}
 
         AHandler h = AHandler $ \wav c s -> fromFOEff wav $ \ex -> \case
           RestoreW (s', a) -> c (ex a) s'
@@ -50,7 +50,7 @@ runWeaveState s0' sem0' = go s0' sem0'
           k'
           (\a s -> c0 (s, a))
           s0
-    {-# INLINE go #-}
+    -- {-# INLINE go #-}
 
     go_ :: s -> Sem (Weave ((,) s) r ': r) a -> Sem r (s, a)
     go_ = go
@@ -98,7 +98,7 @@ stateful f = go
             f (weave (s, ()) (uncurry go_) (runWeaveState s) wav)
               (\(s', x) -> c x s')
           ) k
-        {-# INLINE g' #-}
+        -- {-# INLINE g' #-}
 
         AHandler h = AHandler $ \wav c s -> fromFOEff wav $ \ex e ->
           runSem (f e s) k (\(s', x) -> c (ex x) s')
@@ -106,7 +106,7 @@ stateful f = go
         !k' = mkHandlers $ consHandler' h g'
       in
         runSem sem0 k' (\a s -> c0 (s, a)) s0
-    {-# INLINE go #-}
+    -- {-# INLINE go #-}
 
     go_ :: forall x. s -> Sem (e ': r) x -> Sem r (s, x)
     go_ = go
@@ -145,7 +145,7 @@ lazilyStateful f = go
           handlers
           (\a s -> c0 (s, a))
           s0
-    {-# INLINE go #-}
+    -- {-# INLINE go #-}
 
     go_ :: forall x. s -> Sem (e ': r) x -> Sem r (s, x)
     go_ = go
@@ -179,14 +179,17 @@ rewriteAt
     -> Sem (Append l (e2 ': r)) a
 rewriteAt sl f = go
   where
-    go :: forall x. Sem (Append l (e1 ': r)) x -> Sem (Append l (e2 ': r)) x
-    go = hoistSem $ \(Handlers n hs) ->
+    rewriteAtHS :: HandlerTrans (Append l (e1 ': r)) (Append l (e2 ': r))
+    rewriteAtHS (Handlers n hs) =
       let
         AHandler !e2h = AHandler $ getHandler' hs (memberAt @r sl)
         AHandler e1h = AHandler $ \w -> e2h (rewriteWeaving f w)
       in
         Handlers (n . go_) $ replaceHandler' @r @e2 sl e1h hs
-    {-# INLINE go #-}
+
+    go :: forall x. Sem (Append l (e1 ': r)) x -> Sem (Append l (e2 ': r)) x
+    go = hoistSem rewriteAtHS
+    -- {-# INLINE go #-}
 
     go_ :: forall x. Sem (Append l (e1 ': r)) x -> Sem (Append l (e2 ': r)) x
     go_ = go
@@ -206,7 +209,7 @@ transform
     -> Sem (e1 ': r) a
     -> Sem r a
 transform = transformUsing membership
-{-# INLINE transform #-}
+-- -- {-# INLINE transform #-}
 
 transformUsing
     :: forall e2 e1 r a

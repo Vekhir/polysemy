@@ -52,6 +52,7 @@ default-extensions:
   - TypeOperators
   - TypeFamilies
   - UnicodeSyntax
+  - Strict
 
 when:
   # To ensure GHC 9.0.2 compatibility.
